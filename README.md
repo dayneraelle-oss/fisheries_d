@@ -1,20 +1,25 @@
 # Fisheries Data Warehouse
 
 A PostgreSQL star-schema data warehouse for fish landing data. It contains a
-complete ETL flow (staging -> cleaning -> dimensions -> fact), data quality
-checks, star queries, and a Slowly Changing Dimension (SCD Type 2)
-implementation for vessels.
+complete ETL flow (extract -> clean -> load), data quality checks, star queries,
+and a Slowly Changing Dimension (SCD Type 2) implementation for vessels.
 
 ## Repository structure
 
 ```
 fisheries_d/
 │
-├── powerbi/
-│   └── fisheries_dashboard.pbix
-│
 ├── database/
-│   └── schema.sql
+│   ├── schema.sql
+│   ├── lab1_fisheries_star_schema.sql
+│   ├── lab2_etl_pipeline.sql
+│   └── lab3_data_cleaning.sql
+│
+├── powerbi/
+│   └── abdurahmandataset_dashboard.pbix
+│
+├── datasets/
+│   └── raw_landing.csv
 │
 ├── screenshots/
 │   └── dashboard.png
@@ -22,19 +27,33 @@ fisheries_d/
 └── README.md
 ```
 
-## Database
+## Database scripts
 
-`database/schema.sql` creates a `dw` schema containing:
+`database/schema.sql` is the full combined script (star schema plus the ETL and
+data-cleaning activity) and can be run on its own. The `lab*` files are the same
+pipeline broken into labeled, runnable steps; run them in order. Each file is
+wrapped in its own transaction.
 
-- **Staging:** `raw_landing`
-- **Cleaning:** `clean_landing`, `rejected_landing` (audit trail for invalid rows)
-- **Dimensions:** `dim_date`, `dim_port`, `dim_species`, `dim_vessel` (SCD Type 2)
-- **Fact:** `fact_landing` (`total_value` is a generated column)
+1. **`lab1_fisheries_star_schema.sql`** — creates the `dw` schema, the
+   dimensions (`dim_date`, `dim_port`, `dim_species`, `dim_vessel`), the
+   `fact_landing` table, the indexes, the `UNKNOWN` members (key `0`), and
+   populates `dim_date` for 2020–2030.
+2. **`lab2_etl_pipeline.sql`** — extracts the raw landings into
+   `raw_landing`, cleans and deduplicates them, loads the dimensions and fact
+   table, runs the star queries, and demonstrates the SCD Type 2 change for
+   vessel `V001`.
+3. **`lab3_data_cleaning.sql`** — profiles the raw data, rebuilds the cleaned
+   staging tables (`clean_landing`, `rejected_landing`) with the full cleaning
+   rules, and prints data quality checks. Requires `lab2_etl_pipeline.sql`,
+   because it reads `dw.raw_landing`.
 
-Each dimension has an `UNKNOWN` member with key `0` so that unresolved
-references never break the load. The script also includes data profiling,
-deduplication, quality checks, star queries, and an SCD Type 2 test that
-verifies historical reports are unchanged.
+Cleaning rules:
+
+- Trim whitespace and normalize text casing.
+- Deduplicate on the business key (date, port, species, vessel, kg, price).
+- Route invalid rows (missing date, non-positive kg or price) to
+  `rejected_landing` with a reason instead of dropping them silently.
+- Resolve unresolved dimension references through the `UNKNOWN` members.
 
 ## Getting started
 
@@ -43,20 +62,34 @@ Requirements:
 - PostgreSQL 12 or newer (tested on 18)
 - Power BI Desktop (for the dashboard)
 
-Create a database and run the schema:
+Run the full schema:
 
 ```bash
 createdb fisheries
 psql -U postgres -d fisheries -f database/schema.sql
 ```
 
-The script runs in a single transaction and can be re-run safely; it drops and
-recreates the `dw` schema each time.
+Or run the labeled steps in order:
+
+```bash
+psql -U postgres -d fisheries -f database/lab1_fisheries_star_schema.sql
+psql -U postgres -d fisheries -f database/lab2_etl_pipeline.sql
+psql -U postgres -d fisheries -f database/lab3_data_cleaning.sql
+```
+
+`lab1` drops and recreates the `dw` schema, so the full sequence can be re-run
+safely. `lab2` also resets its target dimension and fact rows before loading.
+
+## Datasets
+
+`datasets/raw_landing.csv` is the messy source dataset used by the ETL. The
+script inserts the same rows into `dw.raw_landing`. The cleaned, dimensional,
+and fact tables are derived from it by the pipeline.
 
 ## Power BI dashboard
 
-Open `powerbi/fisheries_dashboard.pbix` in Power BI Desktop and point the
-PostgreSQL connection to your local database. Use the tables in the `dw`
+Open `powerbi/abdurahmandataset_dashboard.pbix` in Power BI Desktop and point
+the PostgreSQL connection to your local database. Use the tables in the `dw`
 schema (`dim_*` and `fact_landing`).
 
 ## Screenshots
@@ -65,6 +98,6 @@ schema (`dim_*` and `fact_landing`).
 
 ## Notes
 
-The report file is `powerbi/fisheries_dashboard.pbix`. The image at
-`screenshots/dashboard.png` is a generated summary visual built from the cleaned
-sample data; replace it with a Power BI screenshot if preferred.
+The image at `screenshots/dashboard.png` is a generated summary visual built
+from the cleaned sample data; replace it with a Power BI screenshot if
+preferred.
