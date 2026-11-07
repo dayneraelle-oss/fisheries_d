@@ -65,5 +65,6 @@ schema (`dim_*` and `fact_landing`).
 
 ## Notes
 
-The report file is `powerbi/fisheries_dashboard.pbix`. The dashboard screenshot
-(`screenshots/dashboard.png`) still needs to be added.
+The report file is `powerbi/fisheries_dashboard.pbix`. The image at
+`screenshots/dashboard.png` is a generated summary visual built from the cleaned
+sample data; replace it with a Power BI screenshot if preferred.
